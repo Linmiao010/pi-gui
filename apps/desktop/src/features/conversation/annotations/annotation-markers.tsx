@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
-import { offsetsToRange } from "./text-offsets";
+import { annotationRangeText, annotationText, offsetsToRange } from "./text-offsets";
 
 /**
  * The marker's span now. Streaming can re-render earlier markdown (a line becoming a table
@@ -8,8 +8,8 @@ import { offsetsToRange } from "./text-offsets";
  */
 function locate(root: Element, marker: AnnotationMarker): Range | null {
   const range = offsetsToRange(root, marker.start, marker.end);
-  if (range?.toString() === marker.anchorText) return range;
-  const text = root.textContent ?? "";
+  if (range && annotationRangeText(range) === marker.anchorText) return range;
+  const text = annotationText(root);
   let best = -1;
   for (
     let at = text.indexOf(marker.anchorText);

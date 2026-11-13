@@ -75,7 +75,11 @@ async function launchWithTranscript(
   }
   const sessionFilePath = await sessionFilePathFromCatalog(userDataDir, { workspaceId, sessionId });
   await appendMessagesToSessionFile(sessionFilePath, messages);
-  return launchDesktop(userDataDir, { testMode: "background" });
+  const harness = await launchDesktop(userDataDir, { testMode: "background" });
+  // Hidden Windows windows deliver synthetic drag steps at roughly one per second.
+  // Keep the owned window visible so hover gaps exercise an actual pointer gesture.
+  if (process.platform === "win32") await harness.focusWindow();
+  return harness;
 }
 
 test("adds transcript selections to chat with comments and sends them before the message", async () => {
@@ -295,8 +299,12 @@ test("a multi-line drag that runs past the text still adds its lines", async () 
     ]);
 
     // A drag on into the next message is not one message's text.
+    await page.mouse.move(20, 20);
+    await expect(page.getByTestId("annotation-chip-popover")).toBeHidden();
+    await settled();
+    const thirdNow = await phraseBox(page, "Third starts");
     const last = await phraseBox(page, "A short last reply");
-    await drag({ x: third.left + 1, y: third.y }, { x: last.right - 1, y: last.y });
+    await drag({ x: thirdNow.left + 1, y: thirdNow.y }, { x: last.right - 1, y: last.y });
     const selected = await page.evaluate(() => window.getSelection()?.toString() ?? "");
     expect(selected).toContain("Third starts");
     expect(selected).toContain("A short last reply");
@@ -352,8 +360,10 @@ test("keeps the selection buttons inside the window when the selection ends at i
     const page = await harness.firstWindow();
     await expect(page.locator(".timeline-item--assistant").last()).toContainText("TN stamps");
     await harness.electronApp.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0]?.setSize(760, 700);
+      BrowserWindow.getAllWindows()[0]?.setContentSize(760, 700);
     });
+    // Pin the renderer viewport independently of Windows frame/DPI rounding.
+    await page.setViewportSize({ width: 760, height: 700 });
     await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(760);
     // At this width the open sidebar is a drawer whose backdrop takes pointer input. A user
     // selects transcript text with it closed.
@@ -393,7 +403,8 @@ test("keeps the selection buttons inside the window when the selection ends at i
     // Placed at the word, the buttons would run past the window.
     expect(word.left + box!.width).toBeGreaterThan(760);
     expect(box!.x).toBeGreaterThanOrEqual(8);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(760 - 8);
+    // Windows DIP conversion can leave sub-millipixel floating-point noise.
+    expect(Number((box!.x + box!.width).toFixed(3))).toBeLessThanOrEqual(760 - 8);
     expect(box!.height).toBe(32);
   } finally {
     await harness.close();
@@ -521,8 +532,9 @@ test("the narrow sidebar drawer covers selection buttons left over from before i
     const page = await harness.firstWindow();
     await expect(page.locator(".timeline-item--assistant").last()).toContainText("TN stamps");
     await harness.electronApp.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0]?.setSize(760, 700);
+      BrowserWindow.getAllWindows()[0]?.setContentSize(760, 700);
     });
+    await page.setViewportSize({ width: 760, height: 700 });
     await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(760);
     await page.getByTestId("sidebar-toggle").click();
     await expect(page.locator(".sidebar")).toHaveCount(0);

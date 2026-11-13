@@ -1,21 +1,46 @@
 import { memo, useMemo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import { CopyButton } from "./copy-button";
+import { normalizeMathMarkdown } from "./markdown-math";
+import { remarkCodeBlocks } from "./markdown-code";
 import {
   remarkWorkspaceFileLines,
   workspaceFileLineFromAnchorProps,
   type WorkspaceFileLine,
 } from "./workspace-file-line";
 
-const REMARK_PLUGINS = [remarkGfm];
+const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkCodeBlocks];
+const REHYPE_PLUGINS = [rehypeKatex];
 
 function markdownComponents(
   onOpenWorkspaceFileLine?: (target: WorkspaceFileLine) => void,
 ): Components {
   return {
-    code: ({ className, children }) => {
+    code: ({ className, children, node }) => {
       const code = String(children).replace(/\n$/, "");
-      return <code className={className}>{code}</code>;
+      const language = node?.properties.dataCodeLanguage;
+      return <code className={language === "math" ? "language-math" : className}>{code}</code>;
+    },
+    pre: ({ children, node }) => {
+      const code = node?.children.find(
+        (child) => child.type === "element" && child.tagName === "code",
+      );
+      if (code?.type !== "element" || typeof code.properties.dataCodeCopy !== "string") {
+        return <pre>{children}</pre>;
+      }
+      const language = code.properties.dataCodeLanguage;
+      return (
+        <div className="message__code-block">
+          <div className="message__code-header" data-annotation-ignore="">
+            <span>{typeof language === "string" ? language : ""}</span>
+            <CopyButton text={code.properties.dataCodeCopy} label="Copy code" testId="copy-code" />
+          </div>
+          <pre>{children}</pre>
+        </div>
+      );
     },
     a: ({ href, children, ...props }) => {
       const file = onOpenWorkspaceFileLine ? workspaceFileLineFromAnchorProps(props) : null;
@@ -65,6 +90,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({
   readonly workspacePath?: string;
   readonly onOpenWorkspaceFileLine?: (target: WorkspaceFileLine) => void;
 }) {
+  const markdown = useMemo(() => normalizeMathMarkdown(text), [text]);
   const components = useMemo(
     () =>
       onOpenWorkspaceFileLine
@@ -75,14 +101,18 @@ export const MessageMarkdown = memo(function MessageMarkdown({
   const remarkPlugins = useMemo(
     () =>
       onOpenWorkspaceFileLine
-        ? [remarkGfm, remarkWorkspaceFileLines(workspacePath ?? null)]
+        ? [...REMARK_PLUGINS, remarkWorkspaceFileLines(workspacePath ?? null)]
         : REMARK_PLUGINS,
     [onOpenWorkspaceFileLine, workspacePath],
   );
   return (
     <div className="message__content" data-annotation-root={annotationRoot ? "" : undefined}>
-      <ReactMarkdown components={components} remarkPlugins={remarkPlugins}>
-        {text}
+      <ReactMarkdown
+        components={components}
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={REHYPE_PLUGINS}
+      >
+        {markdown}
       </ReactMarkdown>
     </div>
   );

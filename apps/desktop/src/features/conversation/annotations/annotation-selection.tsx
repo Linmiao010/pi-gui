@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CloseIcon } from "../../../ui/icons";
 import { ANNOTATION_ROOT_ATTRIBUTE, type OpenAnnotation } from "./annotation-markers";
-import { rangeToOffsets } from "./text-offsets";
+import { ANNOTATION_IGNORED_SELECTOR, annotationRangeText, rangeToOffsets } from "./text-offsets";
 import type { TranscriptAnnotations } from "./use-transcript-annotations";
 
 interface TranscriptSelection {
@@ -55,7 +55,7 @@ function elementOf(node: Node): Element | null {
 
 // Buttons, markers and the Working line around message text: a drag that runs onto them
 // still means the text.
-const ROW_CHROME = ".timeline-item__actions, .annotation-markers, .timeline-working";
+const ROW_CHROME = `.timeline-item__actions, .annotation-markers, .timeline-working, ${ANNOTATION_IGNORED_SELECTOR}`;
 
 /** Whether `range` covers any text a reader would take as content, not row chrome. */
 function coversContent(range: Range): boolean {
@@ -102,7 +102,16 @@ function readTranscriptSelection(pane: HTMLElement): TranscriptSelection | null 
     if (clampStart) range.setStart(root, 0);
     if (clampEnd) range.setEnd(root, root.childNodes.length);
   }
-  const quote = (clampStart || clampEnd ? range.toString() : selection.toString()).trim();
+  const anchorText = annotationRangeText(range);
+  // Chromium can include user-select:none controls when a drag crosses their
+  // parent. Keep native visual line breaks for ordinary selections, but exclude
+  // those controls from quotes as well as from their stable anchor offsets.
+  const crossesControls = Array.from(root.querySelectorAll(ANNOTATION_IGNORED_SELECTOR)).some(
+    (control) => range.intersectsNode(control),
+  );
+  const quote = (
+    clampStart || clampEnd || crossesControls ? anchorText : selection.toString()
+  ).trim();
   if (!quote) return null;
   const { start, end } = rangeToOffsets(root, range);
   const sourceMessageId = row.dataset.sourceMessageId;
@@ -111,7 +120,7 @@ function readTranscriptSelection(pane: HTMLElement): TranscriptSelection | null 
       sourceMessageId && sourceMessageId !== messageId ? [messageId, sourceMessageId] : [messageId],
     start,
     end,
-    anchorText: range.toString(),
+    anchorText,
     quote,
     rect: range.getBoundingClientRect(),
   };

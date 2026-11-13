@@ -26,6 +26,7 @@ import { SentAnnotations } from "./annotations/sent-annotations";
 import { ExtensionCardItem, type RunExtensionAction } from "./extension-card";
 import { ImageAttachmentThumb } from "./image-attachment-thumb";
 import { MessageMarkdown } from "./message-markdown";
+import { CopyButton } from "./copy-button";
 import { stringifyToolValue, toolOutputImages } from "./tool-output-images";
 import { TurnChangesCard, type OpenTurnChange } from "./turn-changes-card";
 import type { WorkspaceFileLine } from "./workspace-file-line";
@@ -209,6 +210,9 @@ function TimelineMessage({
             {annotated ? <SentAnnotations annotations={annotated.annotations} /> : null}
             {annotated && !body.trim() ? null : <MessageMarkdown annotationRoot text={body} />}
           </div>
+          <div className="timeline-item__actions">
+            <CopyButton text={item.text} label="Copy user message" testId="copy-message" />
+          </div>
         </div>
         {markers}
       </article>
@@ -237,8 +241,9 @@ function TimelineMessage({
         text={item.text}
         workspacePath={workspacePath}
       />
-      {forkable ? (
-        <div className="timeline-item__actions">
+      <div className="timeline-item__actions">
+        <CopyButton text={item.text} label="Copy assistant message" testId="copy-message" />
+        {forkable ? (
           <button
             type="button"
             className="timeline-item__action"
@@ -255,8 +260,8 @@ function TimelineMessage({
             <ForkIcon />
             <span className="timeline-item__action-label">Fork</span>
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
       {markers}
     </article>
   );

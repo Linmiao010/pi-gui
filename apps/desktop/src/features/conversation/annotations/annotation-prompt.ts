@@ -3,7 +3,7 @@ export interface TranscriptAnnotation {
   readonly id: string;
   /** Timeline ids of the annotated message: its row id, and its saved id once it has one. */
   readonly messageIds: readonly string[];
-  /** Offsets into the message's rendered text (its root element's textContent). */
+  /** Offsets into rendered content text, excluding marked interface controls. */
   readonly start: number;
   readonly end: number;
   /** The text at those offsets when selected, to find it again if the markdown reflows. */
